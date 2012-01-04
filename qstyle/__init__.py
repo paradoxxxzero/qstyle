@@ -5,8 +5,9 @@ from xcb import composite
 from xcb import damage
 from xcb import xfixes
 import logging
-
 log = logging.getLogger('qstyle')
+from .window import Window
+
 atoms = [
     '_NET_WM_WINDOW_OPACITY',
     '_XROOTPMAP_ID',
@@ -31,6 +32,37 @@ class QStyle(object):
         self._sync()
 
         self.xproto_ex.GrabServer()
+
+        # Getting all windows
+        qt_cookie = self.core.QueryTree(self.screen.root)
+
+        # Redirect all windows
+        self.composite.RedirectSubwindows(
+            self.screen.root,
+            composite.Redirect.Manual
+        )
+
+        # Subscribe to X events
+        self.core.ChangeWindowAttributes(
+            self.screen.root,
+            xproto.CW.EventMask,
+            [
+                xproto.EventMask.KeyPress |
+                xproto.EventMask.KeyRelease |
+                xproto.EventMask.ButtonRelease |
+                xproto.EventMask.SubstructureNotify |
+                xproto.EventMask.StructureNotify |
+                xproto.EventMask.PropertyChange
+            ])
+
+        self._sync()
+        wids = qt_cookie.reply().children
+        self.windows = [Window(self, wid) for wid in wids]
+
+        self.xproto_ex.UngrabServer()
+
+        for window in self.windows:
+            log.info(window)
 
         log.debug('Done')
 
